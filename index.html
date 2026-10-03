@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f7f9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Budget">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<title>Budget Variable v0.3</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#17181a;--muted:#6b7280;--line:#e5e7eb;--soft:#eef2f7;--danger:#b91c1c;--warn:#92400e}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;background:var(--bg);color:var(--text)}
+.app{max-width:720px;margin:auto;min-height:100vh;padding:16px 14px 96px}
+h1{font-size:20px;margin:6px 0 2px}.subtitle{font-size:12px;color:var(--muted);margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+.hero{text-align:center;padding:24px 16px}.hero .label{font-size:13px;color:var(--muted)}.hero .remaining{font-size:40px;font-weight:800;margin:5px 0}.negative{color:var(--danger)}
+.small{font-size:12px;color:var(--muted)} .section-title{font-size:14px;font-weight:700;margin-bottom:10px}
+.category,.tx,.row{padding:11px 0;border-bottom:1px solid var(--line)}.category:last-child,.tx:last-child,.row:last-child{border-bottom:0}
+.cat-head,.tx-top,.row{display:flex;justify-content:space-between;gap:10px;align-items:center}.left{font-size:14px;font-weight:650}.right,.meta{font-size:12px;color:var(--muted);text-align:right}
+.bar{height:8px;background:#eceff3;border-radius:99px;overflow:hidden;margin-top:8px}.bar span{display:block;height:100%;background:#111827}
+button{border:0;border-radius:12px;padding:12px 14px;font-size:15px;font-weight:700;cursor:pointer;background:#111827;color:white;width:100%}
+button.secondary{background:var(--soft);color:#111827}button.danger{background:#fee2e2;color:#991b1b}button.ghost{background:transparent;color:#111827;border:1px solid var(--line)}
+button.inline{width:auto;padding:7px 10px;font-size:12px}
+label{display:block;font-size:12px;color:var(--muted);margin:12px 0 6px}
+input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-size:16px}
+.amount{font-size:27px;font-weight:800;text-align:right}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:9999;background:rgba(255,255,255,.96);border-top:1px solid var(--line);backdrop-filter:blur(10px);padding-bottom:env(safe-area-inset-bottom)}
+.nav-inner{max-width:720px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.nav button{border-radius:0;background:transparent;color:#6b7280;padding:13px 4px 14px;font-size:12px;min-height:52px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.nav button.active{color:#111827}
+.page{display:none}.page.active{display:block}.empty{text-align:center;color:var(--muted);font-size:13px;padding:24px}.amt{font-weight:800}.badge{display:inline-block;font-size:11px;background:var(--soft);padding:3px 7px;border-radius:999px;margin-right:4px}
+.note{font-size:12px;color:var(--muted);line-height:1.6}.total{font-weight:800}
+.monthbar{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.editor{display:grid;grid-template-columns:1.4fr 1fr auto auto;gap:7px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.editor input{padding:10px;font-size:14px}.editor button{padding:9px 10px;font-size:12px}
+.over{color:var(--danger)} .warn{color:var(--warn)}
+@media(max-width:520px){.editor{grid-template-columns:1fr 110px auto}.editor .delete{grid-column:3}.editor .save{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>Budget</h1><div class="subtitle">カテゴリ別の変動費予算を、月ごとに育てる</div>
+
+<section id="home" class="page active">
+  <div class="monthbar">
+    <div><label>表示月</label><input id="homeMonth" type="month"></div>
+    <button class="secondary inline" id="copyPrevTop">前月をコピー</button>
+  </div>
+  <div class="card hero">
+    <div class="label">今月あと使える金額</div>
+    <div id="remaining" class="remaining">¥0</div>
+    <div id="summary" class="small"></div>
+  </div>
+  <div class="card"><div class="section-title">カテゴリ別</div><div id="cats"></div></div>
+  <button id="quick">＋ 支出を記録</button>
+</section>
+
+<section id="add" class="page">
+  <div class="card"><div class="section-title">支出を記録</div>
+    <label>金額</label><input id="amount" class="amount" type="number" inputmode="numeric" min="1" placeholder="0">
+    <label>カテゴリ</label><select id="category"></select>
+    <label>支払方法</label><select id="payment"></select>
+    <label>日付</label><input id="date" type="date">
+    <label>メモ（任意）</label><input id="memo" type="text" placeholder="例：昼食">
+    <div class="actions"><button class="secondary" id="cancel">キャンセル</button><button id="saveTx">登録</button></div>
+  </div>
+</section>
+
+<section id="history" class="page">
+  <div><label>表示月</label><input id="historyMonth" type="month"></div>
+  <div class="card"><div class="section-title">支出履歴</div><div id="historyList"></div></div>
+</section>
+
+<section id="settings" class="page">
+  <div class="monthbar">
+    <div><label>編集する月</label><input id="settingsMonth" type="month"></div>
+    <button class="secondary inline" id="copyPrev">前月をコピー</button>
+  </div>
+
+  <div class="card">
+    <div class="section-title">カテゴリと予算</div>
+    <div id="budgetEditor"></div>
+    <div style="height:10px"></div>
+    <button class="secondary" id="addCategory">＋ カテゴリを追加</button>
+    <div class="note" style="margin-top:10px">予算はいつでも変更できます。変更すると、その月の残額・消化率に即反映されます。</div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">データ</div>
+    <button class="secondary" id="csv">CSVを出力</button><div style="height:8px"></div>
+    <button class="secondary" id="json">JSONバックアップ</button><div style="height:8px"></div>
+    <label>JSONから復元</label><input id="import" type="file" accept="application/json">
+  </div>
+</section>
+</div>
+
+<div class="nav"><div class="nav-inner">
+<button type="button" data-page="home" class="active">ホーム</button>
+<button type="button" data-page="add">記録</button>
+<button type="button" data-page="history">履歴</button>
+<button type="button" data-page="settings">予算編集</button>
+</div></div>
+
+<script>
+function makeId(){
+  if(globalThis.crypto?.randomUUID) return crypto.randomUUID();
+  if(globalThis.crypto?.getRandomValues){const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=[...b].map(x=>x.toString(16).padStart(2,"0")).join("");return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`}
+  return "id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);
+}
+const DEFAULT_BUDGETS=[
+  {id:makeId(),name:"外食",amount:10000},
+  {id:makeId(),name:"コンビニ",amount:5000},
+  {id:makeId(),name:"本",amount:5000},
+  {id:makeId(),name:"自由費",amount:10000},
+  {id:makeId(),name:"予備費",amount:18128}
+];
+const payments=["Amazonカード","ヨドバシカード","PayPayカード","au PAYカード","PayPay","現金","その他"];
+let db, selectedMonth=currentYM();
+
+function currentYM(){let d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
+function today(){let d=new Date();return currentYM()+"-"+String(d.getDate()).padStart(2,"0")}
+function prevYM(ym){let [y,m]=ym.split("-").map(Number);let d=new Date(y,m-2,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
+const yen=n=>new Intl.NumberFormat("ja-JP",{style:"currency",currency:"JPY",maximumFractionDigits:0}).format(Number(n)||0);
+function safe(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+
+function openDb(){return new Promise((res,rej)=>{
+  let r=indexedDB.open("budget-variable-v03",1);
+  r.onupgradeneeded=e=>{
+    let d=e.target.result;
+    if(!d.objectStoreNames.contains("transactions")){
+      let s=d.createObjectStore("transactions",{keyPath:"id",autoIncrement:true});
+      s.createIndex("date","date");
+    }
+    if(!d.objectStoreNames.contains("budgets")){
+      d.createObjectStore("budgets",{keyPath:"month"});
+    }
+  };
+  r.onsuccess=e=>{db=e.target.result;res()};
+  r.onerror=()=>rej(r.error);
+})}
+const store=(name,mode="readonly")=>db.transaction(name,mode).objectStore(name);
+function getAll(name){return new Promise((res,rej)=>{let r=store(name).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
+function addTx(x){return new Promise((res,rej)=>{let r=store("transactions","readwrite").add(x);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
+function delTx(id){return new Promise((res,rej)=>{let r=store("transactions","readwrite").delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
+function putBudget(x){return new Promise((res,rej)=>{let r=store("budgets","readwrite").put(x);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
+function getBudget(month){return new Promise((res,rej)=>{let r=store("budgets").get(month);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
+
+async function ensureBudget(month){
+  let b=await getBudget(month);
+  if(!b){
+    b={month,categories:DEFAULT_BUDGETS.map(x=>({...x,id:makeId()}))};
+    await putBudget(b);
+  }
+  return b;
+}
+async function monthTx(month){return (await getAll("transactions")).filter(x=>x.date?.startsWith(month)).sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id)}
+
+async function renderHome(){
+  let b=await ensureBudget(selectedMonth), tx=await monthTx(selectedMonth);
+  let total=b.categories.reduce((a,x)=>a+Number(x.amount),0), spent=tx.reduce((a,x)=>a+Number(x.amount),0), rem=total-spent;
+  let el=document.getElementById("remaining");el.textContent=yen(rem);el.classList.toggle("negative",rem<0);
+  document.getElementById("summary").textContent=`予算 ${yen(total)} − 使用済み ${yen(spent)}`;
+  let c=document.getElementById("cats"); c.innerHTML="";
+  if(!b.categories.length){c.innerHTML='<div class="empty">予算カテゴリがありません。</div>';return;}
+  b.categories.forEach(cat=>{
+    let used=tx.filter(x=>x.categoryId===cat.id || (!x.categoryId && x.category===cat.name)).reduce((a,x)=>a+Number(x.amount),0);
+    let rr=cat.amount-used, p=cat.amount?Math.min(100,Math.max(0,used/cat.amount*100)):0;
+    let cls=rr<0?"over":"";
+    c.innerHTML+=`<div class="category"><div class="cat-head"><div class="left">${safe(cat.name)}</div><div class="right ${cls}">${yen(used)} / ${yen(cat.amount)}<br>残り ${yen(rr)}</div></div><div class="bar"><span style="width:${p}%"></span></div></div>`;
+  });
+}
+async function refreshCategorySelect(){
+  let month=(document.getElementById("date").value||today()).slice(0,7);
+  let b=await ensureBudget(month), sel=document.getElementById("category");
+  sel.innerHTML="";
+  b.categories.forEach(cat=>sel.add(new Option(cat.name,cat.id)));
+}
+async function renderHistory(){
+  let month=document.getElementById("historyMonth").value||selectedMonth, tx=await monthTx(month);
+  let b=await ensureBudget(month), map=Object.fromEntries(b.categories.map(x=>[x.id,x.name]));
+  let h=document.getElementById("historyList");
+  if(!tx.length){h.innerHTML='<div class="empty">支出はありません。</div>';return}
+  h.innerHTML=tx.map(x=>`<div class="tx"><div class="tx-top"><div><span class="badge">${safe(map[x.categoryId]||x.category||"未分類")}</span><span class="badge">${safe(x.payment)}</span></div><div class="amt">${yen(x.amount)}</div></div><div class="meta">${x.date}${x.memo?" ・ "+safe(x.memo):""} <button class="secondary inline" data-del="${x.id}">削除</button></div></div>`).join("");
+  h.querySelectorAll("[data-del]").forEach(btn=>btn.onclick=async()=>{if(confirm("削除しますか？")){await delTx(Number(btn.dataset.del));await renderAll()}});
+}
+async function renderBudgetEditor(){
+  let month=document.getElementById("settingsMonth").value||selectedMonth,b=await ensureBudget(month),box=document.getElementById("budgetEditor");
+  box.innerHTML="";
+  b.categories.forEach(cat=>{
+    let div=document.createElement("div");div.className="editor";
+    div.innerHTML=`<input data-name="${cat.id}" value="${safe(cat.name)}"><input data-amount="${cat.id}" type="number" min="0" value="${cat.amount}">
+      <button class="secondary inline save" data-save="${cat.id}">保存</button><button class="danger inline delete" data-delete="${cat.id}">削除</button>`;
+    box.appendChild(div);
+  });
+  let total=b.categories.reduce((a,x)=>a+Number(x.amount),0);
+  box.innerHTML+=`<div class="row total"><span>予算合計</span><span>${yen(total)}</span></div>`;
+  box.querySelectorAll("[data-save]").forEach(btn=>btn.onclick=()=>saveBudgetRow(btn.dataset.save));
+  box.querySelectorAll("[data-delete]").forEach(btn=>btn.onclick=()=>deleteBudgetRow(btn.dataset.delete));
+  box.querySelectorAll("input").forEach(inp=>inp.addEventListener("change",()=>{
+    let id=inp.dataset.name||inp.dataset.amount;if(id)saveBudgetRow(id,false);
+  }));
+}
+async function saveBudgetRow(id,notice=true){
+  let month=document.getElementById("settingsMonth").value,b=await ensureBudget(month);
+  let name=document.querySelector(`[data-name="${id}"]`)?.value.trim()||"未設定";
+  let amount=Number(document.querySelector(`[data-amount="${id}"]`)?.value||0);
+  let cat=b.categories.find(x=>x.id===id); if(!cat)return;
+  cat.name=name;cat.amount=amount;await putBudget(b);await renderAll();if(notice)alert("保存しました");
+}
+async function deleteBudgetRow(id){
+  let month=document.getElementById("settingsMonth").value,b=await ensureBudget(month);
+  if(!confirm("このカテゴリをこの月の予算から削除しますか？\n既に登録済みの支出履歴は残ります。"))return;
+  b.categories=b.categories.filter(x=>x.id!==id);await putBudget(b);await renderAll();
+}
+async function addCategory(){
+  let month=document.getElementById("settingsMonth").value,b=await ensureBudget(month);
+  b.categories.push({id:makeId(),name:"新しいカテゴリ",amount:0});await putBudget(b);await renderBudgetEditor();
+}
+async function copyPrevious(targetMonth){
+  let prev=prevYM(targetMonth),src=await getBudget(prev);
+  if(!src){alert("前月の予算がありません");return}
+  if(!confirm(`${prev} の予算を ${targetMonth} にコピーしますか？\n現在の ${targetMonth} の予算は上書きされます。`))return;
+  await putBudget({month:targetMonth,categories:src.categories.map(x=>({...x,id:makeId()}))});
+  await renderAll();
+}
+async function renderAll(){await renderHome();await renderHistory();await renderBudgetEditor();await refreshCategorySelect()}
+
+function page(id){document.querySelectorAll(".page").forEach(x=>x.classList.toggle("active",x.id===id));document.querySelectorAll(".nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id))}
+function download(name,text,type){let b=new Blob([text],{type}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+
+function setupNavigation(){
+  document.querySelectorAll(".nav button[data-page]").forEach(btn=>{
+    btn.addEventListener("click",e=>{
+      e.preventDefault();
+      page(btn.dataset.page);
+    },{passive:false});
+  });
+}
+setupNavigation();
+
+async function init(){
+  await openDb();await ensureBudget(selectedMonth);
+  document.getElementById("homeMonth").value=selectedMonth;document.getElementById("historyMonth").value=selectedMonth;document.getElementById("settingsMonth").value=selectedMonth;document.getElementById("date").value=today();
+  payments.forEach(n=>document.getElementById("payment").add(new Option(n,n)));
+  document.getElementById("quick").onclick=()=>page("add");document.getElementById("cancel").onclick=()=>page("home");
+  document.getElementById("homeMonth").onchange=async()=>{selectedMonth=document.getElementById("homeMonth").value;document.getElementById("historyMonth").value=selectedMonth;document.getElementById("settingsMonth").value=selectedMonth;await renderAll()};
+  document.getElementById("historyMonth").onchange=renderHistory;
+  document.getElementById("settingsMonth").onchange=renderBudgetEditor;
+  document.getElementById("date").onchange=refreshCategorySelect;
+  document.getElementById("copyPrev").onclick=()=>copyPrevious(document.getElementById("settingsMonth").value);
+  document.getElementById("copyPrevTop").onclick=()=>copyPrevious(document.getElementById("homeMonth").value);
+  document.getElementById("addCategory").onclick=addCategory;
+  document.getElementById("saveTx").onclick=async()=>{
+    let v=Number(document.getElementById("amount").value);if(!v)return alert("金額を入力してください");
+    let month=(document.getElementById("date").value||today()).slice(0,7),b=await ensureBudget(month),cat=b.categories.find(x=>x.id===document.getElementById("category").value);
+    await addTx({date:document.getElementById("date").value||today(),amount:v,categoryId:document.getElementById("category").value,category:cat?.name||"",payment:document.getElementById("payment").value,memo:document.getElementById("memo").value.trim(),createdAt:new Date().toISOString()});
+    document.getElementById("amount").value="";document.getElementById("memo").value="";selectedMonth=month;document.getElementById("homeMonth").value=month;document.getElementById("historyMonth").value=month;document.getElementById("settingsMonth").value=month;
+    await renderAll();page("home");
+  };
+  document.getElementById("csv").onclick=async()=>{
+    let rows=await getAll("transactions"),q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+    let budgets=await getAll("budgets"),maps={};budgets.forEach(b=>maps[b.month]=Object.fromEntries(b.categories.map(c=>[c.id,c.name])));
+    let lines=["date,amount,category,payment,memo",...rows.map(x=>[x.date,x.amount,maps[x.date.slice(0,7)]?.[x.categoryId]||x.category,x.payment,x.memo].map(q).join(","))];
+    download("budget-variable.csv","\ufeff"+lines.join("\n"),"text/csv;charset=utf-8");
+  };
+  document.getElementById("json").onclick=async()=>download("budget-variable-backup.json",JSON.stringify({version:3,budgets:await getAll("budgets"),transactions:await getAll("transactions")},null,2),"application/json");
+  document.getElementById("import").onchange=async e=>{
+    let f=e.target.files[0];if(!f)return;
+    try{
+      let d=JSON.parse(await f.text());
+      let tx=store("transactions","readwrite");tx.clear();
+      let bs=store("budgets","readwrite");bs.clear();
+      await new Promise(r=>setTimeout(r,50));
+      for(let b of d.budgets||[])await putBudget(b);
+      for(let x of d.transactions||[]){let y={...x};delete y.id;await addTx(y)}
+      await renderAll();
+    }catch(err){alert("JSONを読み込めませんでした")}
+    e.target.value="";
+  };
+  await renderAll();
+}
+init().catch(err=>{
+  console.error(err);
+  const sub=document.querySelector(".subtitle");
+  if(sub) sub.textContent="初期化に失敗しました。SafariでHTTPSのURLから開き、ページを再読み込みしてください。";
+});
+if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost")){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(err=>console.error("Service Worker registration failed",err)));
+}
+</script>
+</body></html>
